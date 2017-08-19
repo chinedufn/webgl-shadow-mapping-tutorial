@@ -17,6 +17,10 @@ attribute vec3 aVertexPosition;
 uniform mat4 uPMatrix;
 uniform mat4 uMVMatrix;
 
+attribute vec2 depthUv;
+
+varying vec2 vDepthUv;
+
 void main (void) {
   gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 }
@@ -25,23 +29,96 @@ void main (void) {
 var fragmentGLSL = `
 precision mediump float;
 
+varying vec2 vDepthUv;
+
+uniform sampler2D depthColorTexture;
+
+float unpack (vec4 color) {
+  const vec4 bitShifts = vec4(
+    1.0 / (256.0 * 256.0 * 256.0),
+    1.0 / (256.0 * 256.0),
+    1.0 / 256.0,
+    1
+  );
+  return dot(color, bitShifts);
+}
+
 void main(void) {
-  gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+  float depth = unpack(texture2D(depthColorTexture, vDepthUv));
+  depth = pow(depth, 64.0);
+
+  gl_FragColor = vec4(depth, depth, depth, 1.0);
+}
+`
+
+// TODO: Rename to depth VS and depth FS
+var shadowVertexGLSL = `
+attribute vec3 aVertexPosition;
+
+uniform mat4 uPMatrix;
+uniform mat4 uMVMatrix;
+
+void main (void) {
+  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+}
+`
+
+var shadowFragmentGLSL = `
+precision mediump float;
+
+vec4 pack (float depth) {
+  const vec4 bitSh = vec4(
+    256 * 256 * 256,
+    256 * 256,
+    256,
+    1.0
+  );
+  const vec4 bitMask = vec4(
+    0,
+    1.0 / 256.0,
+    1.0 / 256.0,
+    1.0 / 256.0
+  );
+  vec4 comp = fract(depth * bitSh);
+  comp -= comp.xxyz * bitMask;
+  return comp;
+}
+
+void main (void) {
+  gl_FragColor = pack(gl_FragCoord.z);
 }
 `
 
 var vertexShader = gl.createShader(gl.VERTEX_SHADER)
 gl.shaderSource(vertexShader, vertexGLSL)
 gl.compileShader(vertexShader)
+console.log(gl.getShaderInfoLog(vertexShader))
 
 var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
 gl.shaderSource(fragmentShader, fragmentGLSL)
 gl.compileShader(fragmentShader)
+console.log(gl.getShaderInfoLog(fragmentShader))
 
 var shaderProgram = gl.createProgram()
 gl.attachShader(shaderProgram, vertexShader)
 gl.attachShader(shaderProgram, fragmentShader)
 gl.linkProgram(shaderProgram)
+
+var shadowVertexShader = gl.createShader(gl.VERTEX_SHADER)
+gl.shaderSource(shadowVertexShader, shadowVertexGLSL)
+gl.compileShader(shadowVertexShader)
+console.log(gl.getShaderInfoLog(shadowVertexShader))
+
+var shadowFragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
+gl.shaderSource(shadowFragmentShader, shadowFragmentGLSL)
+gl.compileShader(shadowFragmentShader)
+console.log(gl.getShaderInfoLog(shadowFragmentShader))
+
+var shadowProgram = gl.createProgram()
+gl.attachShader(shadowProgram, shadowVertexShader)
+gl.attachShader(shadowProgram, shadowFragmentShader)
+gl.linkProgram(shadowProgram)
+
 gl.useProgram(shaderProgram)
 
 var vertexPositionAttrib = gl.getAttribLocation(shaderProgram, 'aVertexPosition')
@@ -105,6 +182,7 @@ gl.drawElements(gl.TRIANGLES, vertexIndices.length, gl.UNSIGNED_BYTE, 0)
 /**
  * Shadow
  */
+gl.useProgram(shadowProgram)
 
 var shadowFramebuffer = gl.createFramebuffer()
 gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
@@ -121,43 +199,11 @@ var renderBuffer = gl.createRenderbuffer()
 gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer)
 gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 512, 512)
 
-gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, shadowDepthTexture, 0)
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, shadowDepthTexture, 0)
 gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderBuffer)
 
 gl.bindTexture(gl.TEXTURE_2D, null)
 gl.bindRenderbuffer(gl.RENDERBUFFER, null)
-
-var shadowVertexGLSL = `
-attribute vec3 aVertexPosition;
-
-uniform mat4 uPMatrix;
-uniform mat4 uMVMatrix;
-
-void main (void) {
-  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
-}
-`
-
-var shadowFragmentGLSL = `
-precision mediump float;
-
-void main (void) {
-}
-`
-
-var shadowVertexShader = gl.createShader(gl.VERTEX_SHADER)
-gl.shaderSource(shadowVertexShader, shadowVertexGLSL)
-gl.compileShader(shadowVertexShader)
-
-var shadowFragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
-gl.shaderSource(shadowFragmentShader, fragmentGLSL)
-gl.compileShader(shadowFragmentShader)
-
-var shadowProgram = gl.createProgram()
-gl.attachShader(shadowProgram, vertexShader)
-gl.attachShader(shadowProgram, shadowFragmentShader)
-gl.linkProgram(shadowProgram)
-gl.useProgram(shadowProgram)
 
 // TODO: Not sure what size this projection matrix is supposed to be. Need to calculate
 // it so that it can see the entire scene
