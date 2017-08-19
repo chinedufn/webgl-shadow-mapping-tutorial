@@ -136,21 +136,21 @@ gl.attachShader(shadowProgram, shadowFragmentShader)
 gl.linkProgram(shadowProgram)
 
 var vertexPositions = [
-  // Front Bottom Left
+  // Front Bottom Left (0)
   0.0, 0.0, 0.0,
-  // Front Bottom Right
+  // Front Bottom Right (1)
   1.0, 0.0, 0.0,
-  // Front Top Right
+  // Front Top Right (2)
   1.0, 1.0, 0.0,
-  // Front Top Left
+  // Front Top Left (3)
   0.0, 1.0, 0.0,
-  // Back Bottom Left
+  // Back Bottom Left (4)
   0.0, 0.0, -1.0,
-  // Back Bottom Right
+  // Back Bottom Right (5)
   1.0, 0.0, -1.0,
-  // Back Top Right
+  // Back Top Right (6)
   1.0, 1.0, -1.0,
-  // Back Top Left
+  // Back Top Left (7)
   0.0, 1.0, -1.0
 ]
 var vertexIndices = [
@@ -161,7 +161,7 @@ var vertexIndices = [
   // Left Face
   4, 0, 1, 4, 1, 5,
   // Right Face
-  1, 5, 7, 1, 7, 3,
+  1, 5, 6, 1, 6, 2,
   // Top Face
   3, 2, 6, 3, 6, 7,
   // Bottom Face
@@ -208,10 +208,7 @@ gl.bindTexture(gl.TEXTURE_2D, null)
 gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 
 var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -5, 5)
-var lightViewMatrix = glMat4.lookAt([], [1, 1, 0], [0, 0, 0], [0, 1, 0])
-
-lightViewMatrix = glMat4.lookAt([], [0, 2, 2.5], [0, 0, 0], [0, 1, 0])
-lightViewMatrix = glMat4.lookAt([], [0, 1, 1], [0, 0, 0], [0, 1, 0])
+var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
@@ -272,7 +269,7 @@ gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
-gl.drawElements(gl.TRIANGLES, vertexIndices.length, gl.UNSIGNED_SHORT, 0)
+gl.drawElements(gl.TRIANGLES, 6 || vertexIndices.length, gl.UNSIGNED_SHORT, 0)
 
 console.log(gl.getError())
 
