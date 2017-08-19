@@ -47,12 +47,13 @@ float unpack (vec4 color) {
 }
 
 void main(void) {
+  // Don't need for orthographic projections
+  // TODO: Why?
   vec3 fragmentDepth = (shadowPos.xyz / shadowPos.w);
   fragmentDepth.z -= 0.0003;
 
   // This should be from zero to one
   float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
-  lightDepth = unpack(texture2D(depthColorTexture, vec2(0.0, 0.0)));
 
   vec4 color;
   if (fragmentDepth.z < lightDepth) {
@@ -61,9 +62,7 @@ void main(void) {
     color = vec4(0.0, 0.0, 0.0, 1.0);
   }
 
-  color = texture2D(depthColorTexture, fragmentDepth.xy);
   gl_FragColor = color;
-  gl_FragColor = vec4(shadowPos.x, 0.0, 0.0, 1.0);
 }
 `
 
@@ -168,24 +167,6 @@ var vertexIndices = [
   // Bottom Face
   0, 1, 5, 0, 5, 4
 ]
-var vertexUvs = [
-  // Front Bottom Left
-  0.0, 0.0,
-  // Front Bottom Right
-  1.0, 0.0,
-  // Front Top Right
-  1.0, 1.0,
-  // Front Top Left
-  0.0, 1.0,
-  // Back Bottom Left
-  0.0, 0.0,
-  // Back Bottom Right
-  1.0, 0.0,
-  // Back Top Right
-  1.0, 1.0,
-  // Back Top Left
-  0.0, 1.0
-]
 
 /**
  * Shadow
@@ -289,7 +270,6 @@ gl.uniformMatrix4fv(uMVMatrix, false, camera)
 gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 100))
 
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
-lightProjectionMatrix = glMat4.perspective([], Math.PI / 3, 1, 0.01, 100)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
 gl.drawElements(gl.TRIANGLES, vertexIndices.length, gl.UNSIGNED_SHORT, 0)
