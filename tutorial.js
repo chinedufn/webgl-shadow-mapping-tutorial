@@ -13,7 +13,7 @@ attribute vec3 aVertexPosition;
 uniform mat4 uPMatrix;
 uniform mat4 uMVMatrix;
 uniform mat4 lightViewMatrix;
-uniform mat4 uLightProjection;
+uniform mat4 lightProjectionMatrix;
 const mat4 biasMatrix = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
 
 varying vec2 vDepthUv;
@@ -23,12 +23,13 @@ void main (void) {
   gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 
   shadowPos = uPMatrix * lightViewMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
-  shadowPos = biasMatrix * uLightProjection * lightViewMatrix * vec4(aVertexPosition, 1.0);
+  shadowPos = biasMatrix * lightProjectionMatrix * lightViewMatrix * vec4(aVertexPosition, 1.0);
 }
 `
 
 var fragmentGLSL = `
-precision mediump float;
+// precision mediump float;
+precision highp float;
 
 varying vec2 vDepthUv;
 varying vec4 shadowPos;
@@ -46,10 +47,12 @@ float unpack (vec4 color) {
 }
 
 void main(void) {
-  vec3 fragmentDepth = shadowPos.xyz / shadowPos.w;
-  // fragmentDepth.z -= 0.0003;
+  vec3 fragmentDepth = (shadowPos.xyz / shadowPos.w);
+  fragmentDepth.z -= 0.0003;
 
+  // This should be from zero to one
   float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
+  lightDepth = unpack(texture2D(depthColorTexture, vec2(0.0, 0.0)));
 
   vec4 color;
   if (fragmentDepth.z < lightDepth) {
@@ -58,8 +61,9 @@ void main(void) {
     color = vec4(0.0, 0.0, 0.0, 1.0);
   }
 
+  color = texture2D(depthColorTexture, fragmentDepth.xy);
   gl_FragColor = color;
-  // gl_FragColor = texture2D(depthColorTexture, vDepthUv);
+  gl_FragColor = vec4(shadowPos.x, 0.0, 0.0, 1.0);
 }
 `
 
@@ -76,7 +80,8 @@ void main (void) {
 `
 
 var shadowFragmentGLSL = `
-precision mediump float;
+// precision mediump float;
+precision highp float;
 
 vec4 pack (float depth) {
   const vec4 bitSh = vec4(
@@ -284,9 +289,12 @@ gl.uniformMatrix4fv(uMVMatrix, false, camera)
 gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 100))
 
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
+lightProjectionMatrix = glMat4.perspective([], Math.PI / 3, 1, 0.01, 100)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
 gl.drawElements(gl.TRIANGLES, vertexIndices.length, gl.UNSIGNED_SHORT, 0)
+
+console.log(gl.getError())
 
 function createImageFromTexture(gl, texture, width, height) {
     // Create a framebuffer backed by the texture
