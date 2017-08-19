@@ -46,7 +46,7 @@ void main(void) {
   depth = pow(depth, 64.0);
 
   gl_FragColor = vec4(depth, depth, depth, 1.0);
-  gl_FragColor = texture2D(depthColorTexture, vDepthUv);
+  // gl_FragColor = texture2D(depthColorTexture, vDepthUv);
 }
 `
 
@@ -85,7 +85,6 @@ vec4 pack (float depth) {
 
 void main (void) {
   gl_FragColor = pack(gl_FragCoord.z);
-  gl_FragColor = vec4(0.0, 1.0, 1.0, 1.0);
 }
 `
 
