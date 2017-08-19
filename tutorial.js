@@ -7,20 +7,23 @@ var gl = canvas.getContext('webgl')
 var mountLocation = document.getElementById('webgl-shadow-mapping-tut') || document.body
 mountLocation.appendChild(canvas)
 
-
 var vertexGLSL = `
 attribute vec3 aVertexPosition;
 
 uniform mat4 uPMatrix;
 uniform mat4 uMVMatrix;
-
-attribute vec2 depthUv;
+uniform mat4 lightViewMatrix;
+uniform mat4 uLightProjection;
+const mat4 biasMatrix = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
 
 varying vec2 vDepthUv;
+varying vec4 shadowPos;
 
 void main (void) {
   gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
-  vDepthUv = depthUv;
+
+  shadowPos = uPMatrix * lightViewMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+  shadowPos = biasMatrix * uLightProjection * lightViewMatrix * vec4(aVertexPosition, 1.0);
 }
 `
 
@@ -28,6 +31,7 @@ var fragmentGLSL = `
 precision mediump float;
 
 varying vec2 vDepthUv;
+varying vec4 shadowPos;
 
 uniform sampler2D depthColorTexture;
 
@@ -42,10 +46,19 @@ float unpack (vec4 color) {
 }
 
 void main(void) {
-  float depth = unpack(texture2D(depthColorTexture, vDepthUv));
-  depth = pow(depth, 64.0);
+  vec3 fragmentDepth = shadowPos.xyz / shadowPos.w;
+  // fragmentDepth.z -= 0.0003;
 
-  gl_FragColor = vec4(depth, depth, depth, 1.0);
+  float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
+
+  vec4 color;
+  if (fragmentDepth.z < lightDepth) {
+    color = vec4(1.0, 1.0, 1.0, 1.0);
+  } else {
+    color = vec4(0.0, 0.0, 0.0, 1.0);
+  }
+
+  gl_FragColor = color;
   // gl_FragColor = texture2D(depthColorTexture, vDepthUv);
 }
 `
@@ -208,13 +221,11 @@ gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER,
 gl.bindTexture(gl.TEXTURE_2D, null)
 gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 
-// TODO: Not sure what size this projection matrix is supposed to be. Need to calculate
-// it so that it can see the entire scene
-var lightProjectionMatrix = glMat4.perspective([], Math.PI / 3, 1, 0.01, 100)
+var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -5, 5)
 var lightViewMatrix = glMat4.lookAt([], [1, 1, 0], [0, 0, 0], [0, 1, 0])
 
 lightViewMatrix = glMat4.lookAt([], [0, 2, 2.5], [0, 0, 0], [0, 1, 0])
-lightViewMatrix = glMat4.lookAt([], [0, 0, 2.5], [0, 0, 0], [0, 1, 0])
+lightViewMatrix = glMat4.lookAt([], [0, 1, 1], [0, 0, 0], [0, 1, 0])
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
@@ -246,14 +257,6 @@ gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 var vertexPositionAttrib = gl.getAttribLocation(shaderProgram, 'aVertexPosition')
 gl.enableVertexAttribArray(vertexPositionAttrib)
 
-var vertexUvAttrib = gl.getAttribLocation(shaderProgram, 'depthUv')
-gl.enableVertexAttribArray(vertexUvAttrib)
-
-var vertexUvBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ARRAY_BUFFER, vertexUvBuffer)
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexUvs), gl.STATIC_DRAW)
-gl.vertexAttribPointer(vertexUvAttrib, 2, gl.FLOAT, false, 0, 0)
-
 // TODO: Rename
 var samplerUniform = gl.getUniformLocation(shaderProgram, 'depthColorTexture')
 
@@ -272,15 +275,18 @@ gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(vertexIndices), gl.STATIC
 
 var uMVMatrix = gl.getUniformLocation(shaderProgram, 'uMVMatrix')
 var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
+var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightViewMatrix')
+var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
 
 var camera = glMat4.lookAt([], [0, 2, 2.5], [0, 0, 0], [0, 1, 0])
-var camera = glMat4.lookAt([], [0, 0, 2.5], [0, 0, 0], [0, 1, 0])
+camera = glMat4.lookAt([], [2.5, 3, 3.5], [0, 0, 0], [0, 1, 0])
 gl.uniformMatrix4fv(uMVMatrix, false, camera)
 gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 100))
 
+gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
+gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
+
 gl.drawElements(gl.TRIANGLES, vertexIndices.length, gl.UNSIGNED_SHORT, 0)
-
-
 
 function createImageFromTexture(gl, texture, width, height) {
     // Create a framebuffer backed by the texture
