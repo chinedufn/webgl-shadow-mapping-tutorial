@@ -22,7 +22,6 @@ varying vec4 shadowPos;
 void main (void) {
   gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 
-  shadowPos = uPMatrix * lightViewMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
   shadowPos = biasMatrix * lightProjectionMatrix * lightViewMatrix * vec4(aVertexPosition, 1.0);
 }
 `
@@ -52,10 +51,11 @@ void main(void) {
   vec3 fragmentDepth = (shadowPos.xyz / shadowPos.w);
   fragmentDepth.z -= 0.0003;
 
-  // This should be from zero to one
+  // Light depth is wrong, fragment depth is right (it seems like)
   float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
 
   vec4 color;
+  // This should be evaluating to true, figure out why it isn't
   if (fragmentDepth.z < lightDepth) {
     color = vec4(1.0, 1.0, 1.0, 1.0);
   } else {
@@ -63,6 +63,7 @@ void main(void) {
   }
 
   gl_FragColor = color;
+  gl_FragColor = vec4(lightDepth, fragmentDepth.z, 0.0, 1.0);
 }
 `
 
@@ -207,8 +208,11 @@ gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER,
 gl.bindTexture(gl.TEXTURE_2D, null)
 gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 
-var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -5, 5)
-var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
+// TODO: When our near and far were 0 - 6 this didn't work, but when we increased
+// the range we started getting the correct number, why?
+var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -290.0, 296)
+
+var lightViewMatrix = glMat4.lookAt([], [0, 0, -2], [0, 0, 0], [0, 1, 0])
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
@@ -261,7 +265,6 @@ var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
 var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightViewMatrix')
 var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
 
-var camera = glMat4.lookAt([], [0, 2, 2.5], [0, 0, 0], [0, 1, 0])
 camera = glMat4.lookAt([], [2.5, 3, 3.5], [0, 0, 0], [0, 1, 0])
 gl.uniformMatrix4fv(uMVMatrix, false, camera)
 gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 100))
