@@ -290,6 +290,8 @@ gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
+gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
+
 /**
  * Floor
  */
@@ -301,6 +303,8 @@ gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
 var floorIndexBuffer = gl.createBuffer()
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_DRAW)
+
+gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 
 console.log(gl.getError())
 
