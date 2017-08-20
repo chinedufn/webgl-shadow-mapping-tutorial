@@ -7,6 +7,8 @@ var gl = canvas.getContext('webgl')
 var mountLocation = document.getElementById('webgl-shadow-mapping-tut') || document.body
 mountLocation.appendChild(canvas)
 
+gl.enable(gl.DEPTH_TEST)
+
 var vertexGLSL = `
 attribute vec3 aVertexPosition;
 
@@ -49,7 +51,7 @@ void main(void) {
   // Don't need for orthographic projections
   // TODO: Why?
   vec3 fragmentDepth = (shadowPos.xyz / shadowPos.w);
-  fragmentDepth.z -= 0.0003;
+  // fragmentDepth.z -= 0.0003;
 
   // Light depth is wrong, fragment depth is right (it seems like)
   float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
@@ -63,7 +65,6 @@ void main(void) {
   }
 
   gl_FragColor = color;
-  gl_FragColor = vec4(lightDepth, fragmentDepth.z, 0.0, 1.0);
 }
 `
 
@@ -208,11 +209,14 @@ gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER,
 gl.bindTexture(gl.TEXTURE_2D, null)
 gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 
-// TODO: When our near and far were 0 - 6 this didn't work, but when we increased
-// the range we started getting the correct number, why?
+// TODO: We just changed it into a square and values look different. Does it need to be
+// a square?
 var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -290.0, 296)
+lightProjectionMatrix = glMat4.ortho([], -10, 10, -10, 10, -10.0, 20)
 
-var lightViewMatrix = glMat4.lookAt([], [0, 0, -2], [0, 0, 0], [0, 1, 0])
+var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
+lightViewMatrix = glMat4.lookAt([], [0, 0, 3], [0, 0, 0], [0, 1, 0])
+// glMat4.invert(lightViewMatrix, lightViewMatrix)
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
@@ -272,7 +276,7 @@ gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
-gl.drawElements(gl.TRIANGLES, 6 || vertexIndices.length, gl.UNSIGNED_SHORT, 0)
+gl.drawElements(gl.TRIANGLES, 12 || vertexIndices.length, gl.UNSIGNED_SHORT, 0)
 
 console.log(gl.getError())
 
