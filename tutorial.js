@@ -51,7 +51,7 @@ void main(void) {
   // Don't need for orthographic projections
   // TODO: Why?
   vec3 fragmentDepth = (shadowPos.xyz / shadowPos.w);
-  // fragmentDepth.z -= 0.0003;
+  fragmentDepth.z -= 0.0003;
 
   // Light depth is wrong, fragment depth is right (it seems like)
   float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
@@ -65,6 +65,7 @@ void main(void) {
   }
 
   gl_FragColor = color;
+  gl_FragColor = vec4(lightDepth, fragmentDepth.z, 0.0, 1.0);
 }
 `
 
@@ -161,7 +162,7 @@ var vertexIndices = [
   // Back Face
   4, 5, 6, 4, 6, 7,
   // Left Face
-  4, 0, 1, 4, 1, 5,
+  4, 0, 3, 4, 3, 7,
   // Right Face
   1, 5, 6, 1, 6, 2,
   // Top Face
@@ -276,7 +277,7 @@ gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
-gl.drawElements(gl.TRIANGLES, 12 || vertexIndices.length, gl.UNSIGNED_SHORT, 0)
+gl.drawElements(gl.TRIANGLES, 18 || vertexIndices.length, gl.UNSIGNED_SHORT, 0)
 
 console.log(gl.getError())
 
