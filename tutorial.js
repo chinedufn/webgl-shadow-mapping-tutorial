@@ -1,4 +1,5 @@
 var glMat4 = require('gl-mat4')
+var stanfordDragon = require('stanford-dragon/4')
 
 var canvas = document.createElement('canvas')
 canvas.width = 500
@@ -65,7 +66,7 @@ void main(void) {
   }
 
   gl_FragColor = color;
-  gl_FragColor = vec4(lightDepth, fragmentDepth.z, 0.0, 1.0);
+  // gl_FragColor = vec4(lightDepth, fragmentDepth.z, 0.0, 1.0);
 }
 `
 
@@ -138,7 +139,7 @@ gl.attachShader(shadowProgram, shadowVertexShader)
 gl.attachShader(shadowProgram, shadowFragmentShader)
 gl.linkProgram(shadowProgram)
 
-var vertexPositions = [
+var dragonPositions = [
   // Front Bottom Left (0)
   0.0, 0.0, 0.0,
   // Front Bottom Right (1)
@@ -156,7 +157,7 @@ var vertexPositions = [
   // Back Top Left (7)
   0.0, 1.0, -1.0
 ]
-var vertexIndices = [
+var dragonIndices = [
   // Front face
   0, 1, 2, 0, 2, 3,
   // Back Face
@@ -170,6 +171,22 @@ var vertexIndices = [
   // Bottom Face
   0, 1, 5, 0, 5, 4
 ]
+dragonPositions = stanfordDragon.positions
+dragonIndices = stanfordDragon.cells
+dragonPositions = dragonPositions.reduce(function (all, vertex) {
+  all.push(vertex[0])
+  all.push(vertex[1])
+  all.push(vertex[2])
+  return all
+}, [])
+dragonIndices = dragonIndices.reduce(function (all, vertex) {
+  all.push(vertex[0])
+  all.push(vertex[1])
+  all.push(vertex[2])
+  return all
+}, [])
+
+console.log(dragonIndices)
 
 /**
  * Shadow
@@ -181,12 +198,12 @@ gl.enableVertexAttribArray(vertexPositionAttrib)
 
 var vertexPositionBuffer = gl.createBuffer()
 gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer)
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositions), gl.STATIC_DRAW)
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(dragonPositions), gl.STATIC_DRAW)
 gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
 
 var vertexIndexBuffer = gl.createBuffer()
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertexIndexBuffer)
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(vertexIndices), gl.STATIC_DRAW)
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(dragonIndices), gl.STATIC_DRAW)
 
 var shadowFramebuffer = gl.createFramebuffer()
 gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
@@ -213,10 +230,10 @@ gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 // TODO: We just changed it into a square and values look different. Does it need to be
 // a square?
 var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -290.0, 296)
-lightProjectionMatrix = glMat4.ortho([], -10, 10, -10, 10, -10.0, 20)
+lightProjectionMatrix = glMat4.ortho([], -100, 100, -100, 100, -100.0, 200)
 
 var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
-lightViewMatrix = glMat4.lookAt([], [0, 0, 3], [0, 0, 0], [0, 1, 0])
+lightViewMatrix = glMat4.lookAt([], [-3, 0, -3], [0, 0, 0], [0, 1, 0])
 // glMat4.invert(lightViewMatrix, lightViewMatrix)
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
@@ -230,7 +247,7 @@ gl.clearColor(0, 0, 0, 1)
 gl.clearDepth(1.0)
 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-gl.drawElements(gl.TRIANGLES, vertexIndices.length, gl.UNSIGNED_SHORT, 0)
+gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
 
 gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
 gl.generateMipmap(gl.TEXTURE_2D)
@@ -258,12 +275,12 @@ gl.uniform1i(samplerUniform, 0)
 
 var vertexPositionBuffer = gl.createBuffer()
 gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer)
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertexPositions), gl.STATIC_DRAW)
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(dragonPositions), gl.STATIC_DRAW)
 gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
 
 var vertexIndexBuffer = gl.createBuffer()
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertexIndexBuffer)
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(vertexIndices), gl.STATIC_DRAW)
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(dragonIndices), gl.STATIC_DRAW)
 
 var uMVMatrix = gl.getUniformLocation(shaderProgram, 'uMVMatrix')
 var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
@@ -271,13 +288,14 @@ var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightViewMatrix')
 var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
 
 camera = glMat4.lookAt([], [2.5, 3, 3.5], [0, 0, 0], [0, 1, 0])
+camera = glMat4.lookAt([], [2.5, 150, 155], [0, 0, 0], [0, 1, 0])
 gl.uniformMatrix4fv(uMVMatrix, false, camera)
-gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 100))
+gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 200))
 
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
-gl.drawElements(gl.TRIANGLES, 18 || vertexIndices.length, gl.UNSIGNED_SHORT, 0)
+gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
 
 console.log(gl.getError())
 

@@ -32,6 +32,7 @@
     "standard": "^10.0.3"
   },
   "dependencies": {
-    "gl-mat4": "^1.1.4"
+    "gl-mat4": "^1.1.4",
+    "stanford-dragon": "^1.1.1"
   }
 }
