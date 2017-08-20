@@ -52,7 +52,8 @@ void main(void) {
   // Don't need for orthographic projections
   // TODO: Why?
   vec3 fragmentDepth = (shadowPos.xyz / shadowPos.w);
-  fragmentDepth.z -= 0.0003;
+  float acneRemover = 0.007;
+  fragmentDepth.z -= acneRemover;
 
   // Light depth is wrong, fragment depth is right (it seems like)
   float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
@@ -65,7 +66,21 @@ void main(void) {
     color = vec4(0.0, 0.0, 0.0, 1.0);
   }
 
-  gl_FragColor = color;
+  // TODO: Read from texture using textureSize?
+  float texelSize = 1.0 / 512.0;
+  float shadow = 0.0;
+
+  for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++) {
+      float texelDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy + vec2(x, y) * texelSize));
+      if (fragmentDepth.z < texelDepth) {
+        shadow += 1.0;
+      }
+    }
+  }
+  shadow /= 9.0;
+
+  gl_FragColor = vec4(shadow, shadow, shadow, 1.0);
   // gl_FragColor = vec4(lightDepth, fragmentDepth.z, 0.0, 1.0);
 }
 `
@@ -141,13 +156,13 @@ gl.linkProgram(shadowProgram)
 
 var floorPositions = [
   // Bottom Left (0)
-  -300.0, 0.0, 300.0,
+  -30.0, 0.0, 30.0,
   // Bottom Right (1)
-  300.0, 0.0, 300.0,
+  30.0, 0.0, 30.0,
   // Top Right (2)
-  300.0, 0.0, -300.0,
+  30.0, 0.0, -30.0,
   // Top Left (3)
-  -300.0, 0.0, -300.0
+  -30.0, 0.0, -30.0
 ]
 var floorIndices = [
   // Front face
@@ -156,9 +171,9 @@ var floorIndices = [
 var dragonPositions = stanfordDragon.positions
 var dragonIndices = stanfordDragon.cells
 dragonPositions = dragonPositions.reduce(function (all, vertex) {
-  all.push(vertex[0])
-  all.push(vertex[1])
-  all.push(vertex[2])
+  all.push(vertex[0] / 5)
+  all.push(vertex[1] / 5)
+  all.push(vertex[2] / 5)
   return all
 }, [])
 dragonIndices = dragonIndices.reduce(function (all, vertex) {
@@ -222,10 +237,10 @@ gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 // TODO: We just changed it into a square and values look different. Does it need to be
 // a square?
 var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -290.0, 296)
-lightProjectionMatrix = glMat4.ortho([], -100, 100, -100, 100, -100.0, 200)
+lightProjectionMatrix = glMat4.ortho([], -50, 50, -50, 50, -50.0, 100)
 
 var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
-lightViewMatrix = glMat4.lookAt([], [-3, 3, -3], [0, 0, 0], [0, 1, 0])
+lightViewMatrix = glMat4.lookAt([], [0, 3, -3], [0, 0, 0], [0, 1, 0])
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
@@ -277,9 +292,6 @@ var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
 var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightViewMatrix')
 var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
 
-var camera = glMat4.lookAt([], [-155.5, 150, 100], [0, 0, 0], [0, 1, 0])
-gl.uniformMatrix4fv(uMVMatrix, false, camera)
-gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
 
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
@@ -292,6 +304,7 @@ console.log(gl.getError())
 
 function drawShadowMap () {
   gl.useProgram(shadowProgram)
+  // gl.cullFace(gl.FRONT)
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
 
@@ -308,7 +321,10 @@ function drawShadowMap () {
   gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
+
   gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
+
+  // gl.cullFace(gl.BACK)
 
   gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
   gl.generateMipmap(gl.TEXTURE_2D)
@@ -317,8 +333,30 @@ function drawShadowMap () {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 }
 
+var xRotation = 0
+var yRotation = 0
 function drawModels () {
+  yRotation += 0.01
+
   gl.useProgram(shaderProgram)
+
+  var camera = glMat4.create()
+
+  var xRotMatrix = glMat4.create()
+  var yRotMatrix = glMat4.create()
+
+  glMat4.rotateX(xRotMatrix, xRotMatrix, xRotation)
+  glMat4.rotateY(yRotMatrix, yRotMatrix, yRotation)
+
+  glMat4.multiply(camera, camera, xRotMatrix)
+  glMat4.multiply(camera, camera, yRotMatrix)
+
+  glMat4.translate(camera, camera, [0, 30, 30])
+
+  camera = glMat4.lookAt(camera, [camera[12], camera[13], camera[14]], [0, 0, 0], [0, 1, 0])
+
+  gl.uniformMatrix4fv(uMVMatrix, false, camera)
+  gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
 
   gl.activeTexture(gl.TEXTURE0)
   gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
@@ -343,10 +381,11 @@ function draw () {
   drawShadowMap()
   drawModels()
 
-  // window.requestAnimationFrame(draw)
+  window.requestAnimationFrame(draw)
 }
 draw()
 
+var shadowMapViewImage = new window.Image()
 function createImageFromTexture(gl, texture, width, height) {
   // Create a framebuffer backed by the texture
   var framebuffer = gl.createFramebuffer();
