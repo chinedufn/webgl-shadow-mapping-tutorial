@@ -139,40 +139,22 @@ gl.attachShader(shadowProgram, shadowVertexShader)
 gl.attachShader(shadowProgram, shadowFragmentShader)
 gl.linkProgram(shadowProgram)
 
-var dragonPositions = [
-  // Front Bottom Left (0)
-  0.0, 0.0, 0.0,
-  // Front Bottom Right (1)
-  1.0, 0.0, 0.0,
-  // Front Top Right (2)
-  1.0, 1.0, 0.0,
-  // Front Top Left (3)
-  0.0, 1.0, 0.0,
-  // Back Bottom Left (4)
-  0.0, 0.0, -1.0,
-  // Back Bottom Right (5)
-  1.0, 0.0, -1.0,
-  // Back Top Right (6)
-  1.0, 1.0, -1.0,
-  // Back Top Left (7)
-  0.0, 1.0, -1.0
+var floorPositions = [
+  // Bottom Left (0)
+  -100.0, 40.0, 100.0,
+  // Bottom Right (1)
+  100.0, 40.0, 100.0,
+  // Top Right (2)
+  100.0, 40.0, 0.0,
+  // Top Left (3)
+  -100.0, 40.0, 0.0
 ]
-var dragonIndices = [
+var floorIndices = [
   // Front face
-  0, 1, 2, 0, 2, 3,
-  // Back Face
-  4, 5, 6, 4, 6, 7,
-  // Left Face
-  4, 0, 3, 4, 3, 7,
-  // Right Face
-  1, 5, 6, 1, 6, 2,
-  // Top Face
-  3, 2, 6, 3, 6, 7,
-  // Bottom Face
-  0, 1, 5, 0, 5, 4
+  0, 1, 2, 0, 2, 3
 ]
-dragonPositions = stanfordDragon.positions
-dragonIndices = stanfordDragon.cells
+var dragonPositions = stanfordDragon.positions
+var dragonIndices = stanfordDragon.cells
 dragonPositions = dragonPositions.reduce(function (all, vertex) {
   all.push(vertex[0])
   all.push(vertex[1])
@@ -185,8 +167,6 @@ dragonIndices = dragonIndices.reduce(function (all, vertex) {
   all.push(vertex[2])
   return all
 }, [])
-
-console.log(dragonIndices)
 
 /**
  * Shadow
@@ -233,7 +213,7 @@ var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -290.0, 296)
 lightProjectionMatrix = glMat4.ortho([], -100, 100, -100, 100, -100.0, 200)
 
 var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
-lightViewMatrix = glMat4.lookAt([], [-3, 0, -3], [0, 0, 0], [0, 1, 0])
+lightViewMatrix = glMat4.lookAt([], [-3, 3, -3], [0, 0, 0], [0, 1, 0])
 // glMat4.invert(lightViewMatrix, lightViewMatrix)
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
@@ -248,6 +228,22 @@ gl.clearDepth(1.0)
 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
+
+/**
+ * Floor
+ */
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer)
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(floorPositions), gl.STATIC_DRAW)
+gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
+
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertexIndexBuffer)
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_DRAW)
+
+gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
+
+/**
+ * Mip map
+ */
 
 gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
 gl.generateMipmap(gl.TEXTURE_2D)
@@ -290,12 +286,24 @@ var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatr
 camera = glMat4.lookAt([], [2.5, 3, 3.5], [0, 0, 0], [0, 1, 0])
 camera = glMat4.lookAt([], [2.5, 150, 155], [0, 0, 0], [0, 1, 0])
 gl.uniformMatrix4fv(uMVMatrix, false, camera)
-gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 200))
+gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 400))
 
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
 gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
+
+/**
+ * Floor
+ */
+gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer)
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(floorPositions), gl.STATIC_DRAW)
+gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
+
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertexIndexBuffer)
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_DRAW)
+
+gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 
 console.log(gl.getError())
 
