@@ -141,13 +141,13 @@ gl.linkProgram(shadowProgram)
 
 var floorPositions = [
   // Bottom Left (0)
-  -100.0, 40.0, 100.0,
+  -300.0, 0.0, 300.0,
   // Bottom Right (1)
-  100.0, 40.0, 100.0,
+  300.0, 0.0, 300.0,
   // Top Right (2)
-  100.0, 40.0, 0.0,
+  300.0, 0.0, -300.0,
   // Top Left (3)
-  -100.0, 40.0, 0.0
+  -300.0, 0.0, -300.0
 ]
 var floorIndices = [
   // Front face
@@ -168,21 +168,36 @@ dragonIndices = dragonIndices.reduce(function (all, vertex) {
   return all
 }, [])
 
+var vertexPositionAttrib = gl.getAttribLocation(shadowProgram, 'aVertexPosition')
+gl.enableVertexAttribArray(vertexPositionAttrib)
+
+var dragonPositionBuffer = gl.createBuffer()
+gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(dragonPositions), gl.STATIC_DRAW)
+gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
+
+var dragonIndexBuffer = gl.createBuffer()
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(dragonIndices), gl.STATIC_DRAW)
+
+var floorPositionBuffer = gl.createBuffer()
+gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(floorPositions), gl.STATIC_DRAW)
+gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
+
+var floorIndexBuffer = gl.createBuffer()
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
+gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_DRAW)
+
 /**
  * Shadow
  */
 gl.useProgram(shadowProgram)
 
-var vertexPositionAttrib = gl.getAttribLocation(shadowProgram, 'aVertexPosition')
-gl.enableVertexAttribArray(vertexPositionAttrib)
-
-var vertexPositionBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer)
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(dragonPositions), gl.STATIC_DRAW)
+gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
 gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
 
-var vertexIndexBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertexIndexBuffer)
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(dragonIndices), gl.STATIC_DRAW)
 
 var shadowFramebuffer = gl.createFramebuffer()
@@ -192,9 +207,6 @@ var shadowDepthTexture = gl.createTexture()
 gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST)
-// gl.generateMipmap(gl.TEXTURE_2D)
-// gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-// gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
 
 var renderBuffer = gl.createRenderbuffer()
@@ -214,7 +226,6 @@ lightProjectionMatrix = glMat4.ortho([], -100, 100, -100, 100, -100.0, 200)
 
 var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
 lightViewMatrix = glMat4.lookAt([], [-3, 3, -3], [0, 0, 0], [0, 1, 0])
-// glMat4.invert(lightViewMatrix, lightViewMatrix)
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
@@ -227,19 +238,14 @@ gl.clearColor(0, 0, 0, 1)
 gl.clearDepth(1.0)
 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
-gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
-
 /**
  * Floor
  */
-gl.bindBuffer(gl.ARRAY_BUFFER, vertexPositionBuffer)
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(floorPositions), gl.STATIC_DRAW)
+gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
 gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
 
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, vertexIndexBuffer)
+gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_DRAW)
-
-gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 
 /**
  * Mip map
@@ -255,9 +261,6 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, null)
  * Scene
  */
 gl.useProgram(shaderProgram)
-gl.viewport(0, 0, 500, 500)
-gl.clearColor(1, 0, 1, 1)
-gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
 var vertexPositionAttrib = gl.getAttribLocation(shaderProgram, 'aVertexPosition')
 gl.enableVertexAttribArray(vertexPositionAttrib)
@@ -269,49 +272,62 @@ gl.activeTexture(gl.TEXTURE0)
 gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
 gl.uniform1i(samplerUniform, 0)
 
-var dragonPositionBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(dragonPositions), gl.STATIC_DRAW)
-gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
-
-var dragonIndexBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(dragonIndices), gl.STATIC_DRAW)
-
 var uMVMatrix = gl.getUniformLocation(shaderProgram, 'uMVMatrix')
 var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
 var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightViewMatrix')
 var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
 
-var camera = glMat4.lookAt([], [2.5, 150, 155], [0, 0, 0], [0, 1, 0])
+var camera = glMat4.lookAt([], [-155.5, 150, 100], [0, 0, 0], [0, 1, 0])
 gl.uniformMatrix4fv(uMVMatrix, false, camera)
-gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 400))
+gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
 
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
-gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
-
 /**
  * Floor
  */
-var floorPositionBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(floorPositions), gl.STATIC_DRAW)
-gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
-
-var floorIndexBuffer = gl.createBuffer()
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_DRAW)
-
-gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 
 console.log(gl.getError())
 
 function drawShadowMap () {
+  gl.useProgram(shadowProgram)
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
+
+  gl.viewport(0, 0, 512, 512)
+  gl.clearColor(0, 0, 0, 1)
+  gl.clearDepth(1.0)
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
+  gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
+  gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
+  gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
+  gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
+
+  gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
+  gl.generateMipmap(gl.TEXTURE_2D)
+  gl.bindTexture(gl.TEXTURE_2D, null)
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 }
 
 function drawModels () {
+  gl.useProgram(shaderProgram)
+
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
+  gl.uniform1i(samplerUniform, 0)
+
+  gl.viewport(0, 0, 500, 500)
+  gl.clearColor(1, 0, 1, 1)
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
+
   gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
@@ -332,32 +348,32 @@ function draw () {
 draw()
 
 function createImageFromTexture(gl, texture, width, height) {
-    // Create a framebuffer backed by the texture
-    var framebuffer = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+  // Create a framebuffer backed by the texture
+  var framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
 
-    // Read the contents of the framebuffer
-    var data = new Uint8Array(width * height * 4);
-    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data);
+  // Read the contents of the framebuffer
+  var data = new Uint8Array(width * height * 4);
+  gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data);
 
-    gl.deleteFramebuffer(framebuffer);
+  gl.deleteFramebuffer(framebuffer);
 
-    // Create a 2D canvas to store the result
-    var canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    var context = canvas.getContext('2d');
+  // Create a 2D canvas to store the result
+  var canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  var context = canvas.getContext('2d');
 
-    // Copy the pixels to a 2D canvas
-    var imageData = context.createImageData(width, height);
-    imageData.data.set(data);
-    context.putImageData(imageData, 0, 0);
+  // Copy the pixels to a 2D canvas
+  var imageData = context.createImageData(width, height);
+  imageData.data.set(data);
+  context.putImageData(imageData, 0, 0);
 
-    var img = new Image();
-    img.src = canvas.toDataURL();
-    return img;
+  var img = new Image();
+  img.src = canvas.toDataURL();
+  return img;
 }
 document.body.appendChild(
-   createImageFromTexture(gl, shadowDepthTexture, 512, 512)
+  createImageFromTexture(gl, shadowDepthTexture, 512, 512)
 )
