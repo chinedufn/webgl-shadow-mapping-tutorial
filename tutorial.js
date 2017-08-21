@@ -67,7 +67,7 @@ void main(void) {
   }
 
   // TODO: Read from texture using textureSize?
-  float texelSize = 1.0 / 512.0;
+  float texelSize = 1.0 / 1024.0;
   float shadow = 0.0;
 
   for (int x = -1; x <= 1; x++) {
@@ -222,11 +222,11 @@ var shadowDepthTexture = gl.createTexture()
 gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST)
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 512, 512, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 1024, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
 
 var renderBuffer = gl.createRenderbuffer()
 gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer)
-gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 512, 512)
+gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 1024, 1024)
 
 gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, shadowDepthTexture, 0)
 gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderBuffer)
@@ -237,7 +237,7 @@ gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 // TODO: We just changed it into a square and values look different. Does it need to be
 // a square?
 var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -290.0, 296)
-lightProjectionMatrix = glMat4.ortho([], -50, 50, -50, 50, -50.0, 100)
+lightProjectionMatrix = glMat4.ortho([], -40, 40, -40, 40, -40.0, 80)
 
 var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
 lightViewMatrix = glMat4.lookAt([], [0, 3, -3], [0, 0, 0], [0, 1, 0])
@@ -248,7 +248,7 @@ var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
 gl.uniformMatrix4fv(shadowPMatrix, false, lightProjectionMatrix)
 gl.uniformMatrix4fv(shadowMVMatrix, false, lightViewMatrix)
 
-gl.viewport(0, 0, 512, 512)
+gl.viewport(0, 0, 1024, 1024)
 gl.clearColor(0, 0, 0, 1)
 gl.clearDepth(1.0)
 gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -292,7 +292,6 @@ var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
 var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightViewMatrix')
 var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
 
-
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
@@ -308,7 +307,7 @@ function drawShadowMap () {
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
 
-  gl.viewport(0, 0, 512, 512)
+  gl.viewport(0, 0, 1024, 1024)
   gl.clearColor(0, 0, 0, 1)
   gl.clearDepth(1.0)
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
@@ -333,25 +332,22 @@ function drawShadowMap () {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 }
 
-var xRotation = 0
+var xRotation = Math.PI / 20
 var yRotation = 0
 function drawModels () {
-  yRotation += 0.01
-
   gl.useProgram(shaderProgram)
 
   var camera = glMat4.create()
+  glMat4.translate(camera, camera, [0, 0, 40])
 
   var xRotMatrix = glMat4.create()
   var yRotMatrix = glMat4.create()
 
-  glMat4.rotateX(xRotMatrix, xRotMatrix, xRotation)
+  glMat4.rotateX(xRotMatrix, xRotMatrix, -xRotation)
   glMat4.rotateY(yRotMatrix, yRotMatrix, yRotation)
 
-  glMat4.multiply(camera, camera, xRotMatrix)
-  glMat4.multiply(camera, camera, yRotMatrix)
-
-  glMat4.translate(camera, camera, [0, 30, 30])
+  glMat4.multiply(camera, xRotMatrix, camera)
+  glMat4.multiply(camera, yRotMatrix, camera)
 
   camera = glMat4.lookAt(camera, [camera[12], camera[13], camera[14]], [0, 0, 0], [0, 1, 0])
 
@@ -385,7 +381,47 @@ function draw () {
 }
 draw()
 
-var shadowMapViewImage = new window.Image()
+var canvasIsPressed = false
+var lastPressX
+var lastPressY
+canvas.onmousedown = function (e) {
+  canvasIsPressed = true
+  lastPressX = e.pageX
+  lastPressY = e.pageY
+}
+canvas.onmouseup = function () {
+  canvasIsPressed = false
+}
+canvas.onmousemove = function (e) {
+  if (canvasIsPressed) {
+    xRotation += (e.pageY - lastPressY) / 50
+    yRotation -= (e.pageX - lastPressX) / 50
+
+    xRotation = Math.min(xRotation, Math.PI / 2.5)
+    xRotation = Math.max(xRotation, 0.1)
+
+    lastPressX = e.pageX
+    lastPressY = e.pageY
+  }
+}
+
+// As you drag your finger we move the camera
+canvas.addEventListener('touchstart', function (e) {
+  lastPressX = e.touches[0].clientX
+  lastPressY = e.touches[0].clientY
+})
+canvas.addEventListener('touchmove', function (e) {
+  e.preventDefault()
+  xRotation += (e.touches[0].clientY - lastPressY) / 50
+  yRotation -= (e.touches[0].clientX - lastPressX) / 50
+
+  xRotation = Math.min(xRotation, Math.PI / 2.5)
+  xRotation = Math.max(xRotation, 0.1)
+
+  lastPressX = e.touches[0].clientX
+  lastPressY = e.touches[0].clientY
+})
+
 function createImageFromTexture(gl, texture, width, height) {
   // Create a framebuffer backed by the texture
   var framebuffer = gl.createFramebuffer();
@@ -414,5 +450,5 @@ function createImageFromTexture(gl, texture, width, height) {
   return img;
 }
 document.body.appendChild(
-  createImageFromTexture(gl, shadowDepthTexture, 512, 512)
+  createImageFromTexture(gl, shadowDepthTexture, 1024, 1024)
 )
