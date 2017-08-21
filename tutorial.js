@@ -241,8 +241,6 @@ lightProjectionMatrix = glMat4.ortho([], -40, 40, -40, 40, -40.0, 80)
 
 // TODO: This is a model view matrix
 var lightViewMatrix = glMat4.lookAt([], [0, 2, -3], [0, 0, 0], [0, 1, 0])
-var dragonModelMatrix = glMat4.create()
-glMat4.rotateX(dragonModelMatrix, dragonModelMatrix, Math.PI/2)
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
@@ -303,7 +301,17 @@ gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
 console.log(gl.getError())
 
+var dragonRotateY = 0
+var dragonModelMatrix = glMat4.create()
+glMat4.rotateY(dragonModelMatrix, dragonModelMatrix, dragonRotateY)
+
+var lightDragonMVMatrix
+var dragonRotation = 0
+var cameraDragonMVMatrix
+
 function drawShadowMap () {
+  dragonRotation += 0.1
+
   gl.useProgram(shadowProgram)
   // gl.cullFace(gl.FRONT)
 
@@ -317,11 +325,19 @@ function drawShadowMap () {
   gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
+
+  lightDragonMVMatrix = glMat4.create()
+  glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotation)
+  glMat4.multiply(lightDragonMVMatrix, lightDragonMVMatrix, lightViewMatrix)
+  gl.uniformMatrix4fv(shadowMVMatrix, false, lightDragonMVMatrix)
+
   gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
 
   gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
+
+  gl.uniformMatrix4fv(shadowMVMatrix, false, lightViewMatrix)
 
   gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 
@@ -353,6 +369,7 @@ function drawModels () {
 
   camera = glMat4.lookAt(camera, [camera[12], camera[13], camera[14]], [0, 0, 0], [0, 1, 0])
 
+  gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
   gl.uniformMatrix4fv(uMVMatrix, false, camera)
   gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
 
