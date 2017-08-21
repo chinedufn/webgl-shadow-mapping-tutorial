@@ -302,15 +302,12 @@ gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 console.log(gl.getError())
 
 var dragonRotateY = 0
-var dragonModelMatrix = glMat4.create()
-glMat4.rotateY(dragonModelMatrix, dragonModelMatrix, dragonRotateY)
 
 var lightDragonMVMatrix
-var dragonRotation = 0
 var cameraDragonMVMatrix
 
 function drawShadowMap () {
-  dragonRotation += 0.1
+  dragonRotateY += 0.01
 
   gl.useProgram(shadowProgram)
   // gl.cullFace(gl.FRONT)
@@ -327,8 +324,8 @@ function drawShadowMap () {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
 
   lightDragonMVMatrix = glMat4.create()
-  glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotation)
-  glMat4.multiply(lightDragonMVMatrix, lightDragonMVMatrix, lightViewMatrix)
+  glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
+  glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
   gl.uniformMatrix4fv(shadowMVMatrix, false, lightDragonMVMatrix)
 
   gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
@@ -356,7 +353,7 @@ function drawModels () {
   gl.useProgram(shaderProgram)
 
   var camera = glMat4.create()
-  glMat4.translate(camera, camera, [0, 0, 45])
+  glMat4.translate(camera, camera, [0, 0, 50])
 
   var xRotMatrix = glMat4.create()
   var yRotMatrix = glMat4.create()
@@ -369,8 +366,19 @@ function drawModels () {
 
   camera = glMat4.lookAt(camera, [camera[12], camera[13], camera[14]], [0, 0, 0], [0, 1, 0])
 
-  gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
-  gl.uniformMatrix4fv(uMVMatrix, false, camera)
+  // Rename to Light Matrix
+  lightDragonMVMatrix = glMat4.create()
+  glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
+  glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
+  gl.uniformMatrix4fv(uMVMatrix, false, lightDragonMVMatrix)
+
+  gl.uniformMatrix4fv(uLightMatrix, false, lightDragonMVMatrix)
+
+  var dragonMVMatrix = glMat4.create()
+  glMat4.rotateY(dragonMVMatrix, dragonMVMatrix, dragonRotateY)
+  glMat4.multiply(dragonMVMatrix, camera, dragonMVMatrix)
+  gl.uniformMatrix4fv(uMVMatrix, false, dragonMVMatrix)
+
   gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
 
   gl.activeTexture(gl.TEXTURE0)
@@ -389,6 +397,11 @@ function drawModels () {
   gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
+
+  gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
+  gl.uniformMatrix4fv(uMVMatrix, false, camera)
+
+
   gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 }
 
