@@ -30,13 +30,13 @@ void main (void) {
 `
 
 var fragmentGLSL = `
-// precision mediump float;
-precision highp float;
+precision mediump float;
 
 varying vec2 vDepthUv;
 varying vec4 shadowPos;
 
 uniform sampler2D depthColorTexture;
+uniform vec3 uColor;
 
 float unpack (vec4 color) {
   const vec4 bitShifts = vec4(
@@ -59,7 +59,6 @@ void main(void) {
   float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
 
   vec4 color;
-  // This should be evaluating to true, figure out why it isn't
   if (fragmentDepth.z < lightDepth) {
     color = vec4(1.0, 1.0, 1.0, 1.0);
   } else {
@@ -80,7 +79,7 @@ void main(void) {
   }
   shadow /= 9.0;
 
-  gl_FragColor = vec4(shadow, shadow, shadow, 1.0);
+  gl_FragColor = vec4(shadow * uColor, 1.0);
   // gl_FragColor = color;
 }
 `
@@ -98,8 +97,7 @@ void main (void) {
 `
 
 var shadowFragmentGLSL = `
-// precision mediump float;
-precision highp float;
+precision mediump float;
 
 vec4 pack (float depth) {
   const vec4 bitSh = vec4(
@@ -291,6 +289,7 @@ var uMVMatrix = gl.getUniformLocation(shaderProgram, 'uMVMatrix')
 var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
 var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightViewMatrix')
 var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
+var uColor = gl.getUniformLocation(shaderProgram, 'uColor')
 
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
@@ -380,13 +379,14 @@ function drawModels () {
   gl.uniformMatrix4fv(uMVMatrix, false, dragonMVMatrix)
 
   gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
+  gl.uniform3fv(uColor, [1.0, 0.0, 0.0])
 
   gl.activeTexture(gl.TEXTURE0)
   gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
   gl.uniform1i(samplerUniform, 0)
 
   gl.viewport(0, 0, 500, 500)
-  gl.clearColor(1, 0, 1, 1)
+  gl.clearColor(0.98, 0.98, 0.98, 1)
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
   gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
@@ -400,7 +400,7 @@ function drawModels () {
 
   gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
   gl.uniformMatrix4fv(uMVMatrix, false, camera)
-
+  gl.uniform3fv(uColor, [0.6, 0.6, 0.6])
 
   gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 }
@@ -422,6 +422,9 @@ canvas.onmousedown = function (e) {
   lastPressY = e.pageY
 }
 canvas.onmouseup = function () {
+  canvasIsPressed = false
+}
+canvas.onmouseout = function () {
   canvasIsPressed = false
 }
 canvas.onmousemove = function (e) {
