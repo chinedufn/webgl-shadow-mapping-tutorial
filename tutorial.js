@@ -81,7 +81,7 @@ void main(void) {
   shadow /= 9.0;
 
   gl_FragColor = vec4(shadow, shadow, shadow, 1.0);
-  // gl_FragColor = vec4(lightDepth, fragmentDepth.z, 0.0, 1.0);
+  // gl_FragColor = color;
 }
 `
 
@@ -239,8 +239,10 @@ gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -290.0, 296)
 lightProjectionMatrix = glMat4.ortho([], -40, 40, -40, 40, -40.0, 80)
 
-var lightViewMatrix = glMat4.lookAt([], [0, 0, -3], [0, 0, 0], [0, 1, 0])
-lightViewMatrix = glMat4.lookAt([], [0, 3, -3], [0, 0, 0], [0, 1, 0])
+// TODO: This is a model view matrix
+var lightViewMatrix = glMat4.lookAt([], [0, 2, -3], [0, 0, 0], [0, 1, 0])
+var dragonModelMatrix = glMat4.create()
+glMat4.rotateX(dragonModelMatrix, dragonModelMatrix, Math.PI/2)
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
@@ -338,7 +340,7 @@ function drawModels () {
   gl.useProgram(shaderProgram)
 
   var camera = glMat4.create()
-  glMat4.translate(camera, camera, [0, 0, 40])
+  glMat4.translate(camera, camera, [0, 0, 45])
 
   var xRotMatrix = glMat4.create()
   var yRotMatrix = glMat4.create()
