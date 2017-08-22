@@ -374,6 +374,7 @@ function drawShadowMap () {
   // We draw our dragon onto our shadow map texture
   var lightDragonMVMatrix = glMat4.create()
   glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
+  glMat4.translate(lightDragonMVMatrix, lightDragonMVMatrix, [0, 0, -3])
   glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
   gl.uniformMatrix4fv(shadowMVMatrix, false, lightDragonMVMatrix)
 
@@ -402,6 +403,7 @@ function drawModels () {
 
   var dragonModelMatrix = glMat4.create()
   glMat4.rotateY(dragonModelMatrix, dragonModelMatrix, dragonRotateY)
+  glMat4.translate(dragonModelMatrix, dragonModelMatrix, [0, 0, -3])
 
   // We use the light's model view matrix of our dragon so that our camera knows if
   // parts of the dragon are in the shadow
