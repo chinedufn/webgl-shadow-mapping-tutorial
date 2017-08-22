@@ -347,10 +347,12 @@ var uColor = gl.getUniformLocation(cameraShaderProgram, 'uColor')
 
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
+gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
 
 // We rotate the dragon about the y axis every frame
 var dragonRotateY = 0
 
+// Draw our dragon onto the shadow map
 function drawShadowMap () {
   dragonRotateY += 0.01
 
@@ -369,6 +371,7 @@ function drawShadowMap () {
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
 
+  // We draw our dragon onto our shadow map texture
   var lightDragonMVMatrix = glMat4.create()
   glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
   glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
@@ -379,50 +382,45 @@ function drawShadowMap () {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 }
 
+// Draw our dragon and floor onto the scene
 function drawModels () {
   gl.useProgram(cameraShaderProgram)
+  gl.viewport(0, 0, 500, 500)
+  gl.clearColor(0.98, 0.98, 0.98, 1)
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
+  // Create our camera view matrix
   var camera = glMat4.create()
   glMat4.translate(camera, camera, [0, 0, 45])
-
   var xRotMatrix = glMat4.create()
   var yRotMatrix = glMat4.create()
-
   glMat4.rotateX(xRotMatrix, xRotMatrix, -xRotation)
   glMat4.rotateY(yRotMatrix, yRotMatrix, yRotation)
-
   glMat4.multiply(camera, xRotMatrix, camera)
   glMat4.multiply(camera, yRotMatrix, camera)
-
   camera = glMat4.lookAt(camera, [camera[12], camera[13], camera[14]], [0, 0, 0], [0, 1, 0])
 
-  // Rename to Light Matrix
-  var lightDragonMVMatrix = glMat4.create()
-  glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
-  glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
-  gl.uniformMatrix4fv(uMVMatrix, false, lightDragonMVMatrix)
+  var dragonModelMatrix = glMat4.create()
+  glMat4.rotateY(dragonModelMatrix, dragonModelMatrix, dragonRotateY)
 
+  // We use the light's model view matrix of our dragon so that our camera knows if
+  // parts of the dragon are in the shadow
+  var lightDragonMVMatrix = glMat4.create()
+  glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, dragonModelMatrix)
   gl.uniformMatrix4fv(uLightMatrix, false, lightDragonMVMatrix)
 
-  var dragonMVMatrix = glMat4.create()
-  glMat4.rotateY(dragonMVMatrix, dragonMVMatrix, dragonRotateY)
-  glMat4.multiply(dragonMVMatrix, camera, dragonMVMatrix)
-  gl.uniformMatrix4fv(uMVMatrix, false, dragonMVMatrix)
+  gl.uniformMatrix4fv(
+    uMVMatrix,
+    false,
+    glMat4.multiply(dragonModelMatrix, camera, dragonModelMatrix)
+  )
 
-  gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
   gl.uniform3fv(uColor, [0.36, 0.66, 0.8])
 
   gl.activeTexture(gl.TEXTURE0)
   gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
   gl.uniform1i(samplerUniform, 0)
 
-  gl.viewport(0, 0, 500, 500)
-  gl.clearColor(0.98, 0.98, 0.98, 1)
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
-  gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
   gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
 
   gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
@@ -436,6 +434,7 @@ function drawModels () {
   gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 }
 
+// Draw our shadow map and light map every request animation frame
 function draw () {
   drawShadowMap()
   drawModels()
