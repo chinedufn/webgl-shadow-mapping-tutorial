@@ -61,9 +61,9 @@ attribute vec3 aVertexPosition;
 
 uniform mat4 uPMatrix;
 uniform mat4 uMVMatrix;
-uniform mat4 lightViewMatrix;
+uniform mat4 lightMViewMatrix;
 uniform mat4 lightProjectionMatrix;
-const mat4 biasMatrix = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
+const mat4 texUnits = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
 
 varying vec2 vDepthUv;
 varying vec4 shadowPos;
@@ -71,7 +71,7 @@ varying vec4 shadowPos;
 void main (void) {
   gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 
-  shadowPos = biasMatrix * lightProjectionMatrix * lightViewMatrix * vec4(aVertexPosition, 1.0);
+  shadowPos = texUnits * lightProjectionMatrix * lightMViewMatrix * vec4(aVertexPosition, 1.0);
 }
 `
 
@@ -95,36 +95,24 @@ float unpack (vec4 color) {
 }
 
 void main(void) {
-  // Don't need for orthographic projections because w is 1
-  // TODO: Why is w 1?
-  vec3 fragmentDepth = (shadowPos.xyz / shadowPos.w);
+  vec3 fragmentDepth = shadowPos.xyz;
   float acneRemover = 0.007;
   fragmentDepth.z -= acneRemover;
 
-  // Light depth is wrong, fragment depth is right (it seems like)
-  float lightDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy));
-
-  vec4 color;
-  if (fragmentDepth.z < lightDepth) {
-    color = vec4(1.0, 1.0, 1.0, 1.0);
-  } else {
-    color = vec4(0.0, 0.0, 0.0, 1.0);
-  }
-
   float texelSize = 1.0 / 1024.0;
-  float shadow = 0.0;
+  float amountInLight = 0.0;
 
   for (int x = -1; x <= 1; x++) {
     for (int y = -1; y <= 1; y++) {
       float texelDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy + vec2(x, y) * texelSize));
       if (fragmentDepth.z < texelDepth) {
-        shadow += 1.0;
+        amountInLight += 1.0;
       }
     }
   }
-  shadow /= 9.0;
+  amountInLight /= 9.0;
 
-  gl_FragColor = vec4(shadow * uColor, 1.0);
+  gl_FragColor = vec4(amountInLight * uColor, 1.0);
 }
 `
 
@@ -276,19 +264,16 @@ gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER,
 gl.bindTexture(gl.TEXTURE_2D, null)
 gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 
-// TODO: We just changed it into a square and values look different. Does it need to be
-// a square?
-var lightProjectionMatrix = glMat4.ortho([], -5, 5, -5, 5, -290.0, 296)
-lightProjectionMatrix = glMat4.ortho([], -40, 40, -40, 40, -40.0, 80)
+var lightProjectionMatrix = glMat4.ortho([], -40, 40, -40, 40, -40.0, 80)
 
 // TODO: This is a model view matrix
-var lightViewMatrix = glMat4.lookAt([], [0, 2, -3], [0, 0, 0], [0, 1, 0])
+var lightMViewMatrix = glMat4.lookAt([], [0, 2, -3], [0, 0, 0], [0, 1, 0])
 
 var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
 var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
 
 gl.uniformMatrix4fv(shadowPMatrix, false, lightProjectionMatrix)
-gl.uniformMatrix4fv(shadowMVMatrix, false, lightViewMatrix)
+gl.uniformMatrix4fv(shadowMVMatrix, false, lightMViewMatrix)
 
 gl.viewport(0, 0, 1024, 1024)
 gl.clearColor(0, 0, 0, 1)
@@ -327,11 +312,11 @@ gl.uniform1i(samplerUniform, 0)
 
 var uMVMatrix = gl.getUniformLocation(shaderProgram, 'uMVMatrix')
 var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
-var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightViewMatrix')
+var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightMViewMatrix')
 var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
 var uColor = gl.getUniformLocation(shaderProgram, 'uColor')
 
-gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
+gl.uniformMatrix4fv(uLightMatrix, false, lightMViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
 /**
@@ -364,7 +349,7 @@ function drawShadowMap () {
 
   lightDragonMVMatrix = glMat4.create()
   glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
-  glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
+  glMat4.multiply(lightDragonMVMatrix, lightMViewMatrix, lightDragonMVMatrix)
   gl.uniformMatrix4fv(shadowMVMatrix, false, lightDragonMVMatrix)
 
   gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
@@ -373,7 +358,7 @@ function drawShadowMap () {
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
 
-  gl.uniformMatrix4fv(shadowMVMatrix, false, lightViewMatrix)
+  gl.uniformMatrix4fv(shadowMVMatrix, false, lightMViewMatrix)
 
   gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 
@@ -402,7 +387,7 @@ function drawModels () {
   // Rename to Light Matrix
   lightDragonMVMatrix = glMat4.create()
   glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
-  glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
+  glMat4.multiply(lightDragonMVMatrix, lightMViewMatrix, lightDragonMVMatrix)
   gl.uniformMatrix4fv(uMVMatrix, false, lightDragonMVMatrix)
 
   gl.uniformMatrix4fv(uLightMatrix, false, lightDragonMVMatrix)
@@ -432,7 +417,7 @@ function drawModels () {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
 
-  gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
+  gl.uniformMatrix4fv(uLightMatrix, false, lightMViewMatrix)
   gl.uniformMatrix4fv(uMVMatrix, false, camera)
   gl.uniform3fv(uColor, [0.6, 0.6, 0.6])
 
