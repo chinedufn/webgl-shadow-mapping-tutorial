@@ -4,11 +4,57 @@ var stanfordDragon = require('stanford-dragon/4')
 var canvas = document.createElement('canvas')
 canvas.width = 500
 canvas.height = 500
-var gl = canvas.getContext('webgl')
-var mountLocation = document.getElementById('webgl-shadow-mapping-tut') || document.body
+var mountLocation = document.getElementById('webgl-shadow-map-tut') || document.body
 mountLocation.appendChild(canvas)
 
+var gl = canvas.getContext('webgl')
 gl.enable(gl.DEPTH_TEST)
+
+var canvasIsPressed = false
+var xRotation = Math.PI / 20
+var yRotation = 0
+var lastPressX
+var lastPressY
+canvas.onmousedown = function (e) {
+  canvasIsPressed = true
+  lastPressX = e.pageX
+  lastPressY = e.pageY
+}
+canvas.onmouseup = function () {
+  canvasIsPressed = false
+}
+canvas.onmouseout = function () {
+  canvasIsPressed = false
+}
+canvas.onmousemove = function (e) {
+  if (canvasIsPressed) {
+    xRotation += (e.pageY - lastPressY) / 50
+    yRotation -= (e.pageX - lastPressX) / 50
+
+    xRotation = Math.min(xRotation, Math.PI / 2.5)
+    xRotation = Math.max(xRotation, 0.1)
+
+    lastPressX = e.pageX
+    lastPressY = e.pageY
+  }
+}
+
+// As you drag your finger we move the camera
+canvas.addEventListener('touchstart', function (e) {
+  lastPressX = e.touches[0].clientX
+  lastPressY = e.touches[0].clientY
+})
+canvas.addEventListener('touchmove', function (e) {
+  e.preventDefault()
+  xRotation += (e.touches[0].clientY - lastPressY) / 50
+  yRotation -= (e.touches[0].clientX - lastPressX) / 50
+
+  xRotation = Math.min(xRotation, Math.PI / 2.5)
+  xRotation = Math.max(xRotation, 0.1)
+
+  lastPressX = e.touches[0].clientX
+  lastPressY = e.touches[0].clientY
+})
 
 var vertexGLSL = `
 attribute vec3 aVertexPosition;
@@ -49,8 +95,8 @@ float unpack (vec4 color) {
 }
 
 void main(void) {
-  // Don't need for orthographic projections
-  // TODO: Why?
+  // Don't need for orthographic projections because w is 1
+  // TODO: Why is w 1?
   vec3 fragmentDepth = (shadowPos.xyz / shadowPos.w);
   float acneRemover = 0.007;
   fragmentDepth.z -= acneRemover;
@@ -65,7 +111,6 @@ void main(void) {
     color = vec4(0.0, 0.0, 0.0, 1.0);
   }
 
-  // TODO: Read from texture using textureSize?
   float texelSize = 1.0 / 1024.0;
   float shadow = 0.0;
 
@@ -80,7 +125,6 @@ void main(void) {
   shadow /= 9.0;
 
   gl_FragColor = vec4(shadow * uColor, 1.0);
-  // gl_FragColor = color;
 }
 `
 
@@ -169,9 +213,9 @@ var floorIndices = [
 var dragonPositions = stanfordDragon.positions
 var dragonIndices = stanfordDragon.cells
 dragonPositions = dragonPositions.reduce(function (all, vertex) {
-  all.push(vertex[0] / 5)
-  all.push(vertex[1] / 5)
-  all.push(vertex[2] / 5)
+  all.push(vertex[0] / 10)
+  all.push(vertex[1] / 10)
+  all.push(vertex[2] / 10)
   return all
 }, [])
 dragonIndices = dragonIndices.reduce(function (all, vertex) {
@@ -218,8 +262,8 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
 
 var shadowDepthTexture = gl.createTexture()
 gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST)
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
 gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 1024, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
 
 var renderBuffer = gl.createRenderbuffer()
@@ -263,10 +307,6 @@ gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_
 /**
  * Mip map
  */
-
-gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
-gl.generateMipmap(gl.TEXTURE_2D)
-gl.bindTexture(gl.TEXTURE_2D, null)
 
 gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
@@ -339,20 +379,14 @@ function drawShadowMap () {
 
   // gl.cullFace(gl.BACK)
 
-  gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
-  gl.generateMipmap(gl.TEXTURE_2D)
-  gl.bindTexture(gl.TEXTURE_2D, null)
-
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 }
 
-var xRotation = Math.PI / 20
-var yRotation = 0
 function drawModels () {
   gl.useProgram(shaderProgram)
 
   var camera = glMat4.create()
-  glMat4.translate(camera, camera, [0, 0, 50])
+  glMat4.translate(camera, camera, [0, 0, 45])
 
   var xRotMatrix = glMat4.create()
   var yRotMatrix = glMat4.create()
@@ -379,7 +413,7 @@ function drawModels () {
   gl.uniformMatrix4fv(uMVMatrix, false, dragonMVMatrix)
 
   gl.uniformMatrix4fv(uPMatrix, false, glMat4.perspective([], Math.PI / 3, 1, 0.01, 900))
-  gl.uniform3fv(uColor, [1.0, 0.0, 0.0])
+  gl.uniform3fv(uColor, [0.36, 0.66, 0.8])
 
   gl.activeTexture(gl.TEXTURE0)
   gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
@@ -413,49 +447,6 @@ function draw () {
 }
 draw()
 
-var canvasIsPressed = false
-var lastPressX
-var lastPressY
-canvas.onmousedown = function (e) {
-  canvasIsPressed = true
-  lastPressX = e.pageX
-  lastPressY = e.pageY
-}
-canvas.onmouseup = function () {
-  canvasIsPressed = false
-}
-canvas.onmouseout = function () {
-  canvasIsPressed = false
-}
-canvas.onmousemove = function (e) {
-  if (canvasIsPressed) {
-    xRotation += (e.pageY - lastPressY) / 50
-    yRotation -= (e.pageX - lastPressX) / 50
-
-    xRotation = Math.min(xRotation, Math.PI / 2.5)
-    xRotation = Math.max(xRotation, 0.1)
-
-    lastPressX = e.pageX
-    lastPressY = e.pageY
-  }
-}
-
-// As you drag your finger we move the camera
-canvas.addEventListener('touchstart', function (e) {
-  lastPressX = e.touches[0].clientX
-  lastPressY = e.touches[0].clientY
-})
-canvas.addEventListener('touchmove', function (e) {
-  e.preventDefault()
-  xRotation += (e.touches[0].clientY - lastPressY) / 50
-  yRotation -= (e.touches[0].clientX - lastPressX) / 50
-
-  xRotation = Math.min(xRotation, Math.PI / 2.5)
-  xRotation = Math.max(xRotation, 0.1)
-
-  lastPressX = e.touches[0].clientX
-  lastPressY = e.touches[0].clientY
-})
 
 function createImageFromTexture(gl, texture, width, height) {
   // Create a framebuffer backed by the texture
