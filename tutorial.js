@@ -333,7 +333,6 @@ gl.bindFramebuffer(gl.FRAMEBUFFER, null)
  */
 gl.useProgram(cameraShaderProgram)
 
-// TODO: Rename
 var samplerUniform = gl.getUniformLocation(cameraShaderProgram, 'depthColorTexture')
 
 gl.activeTexture(gl.TEXTURE0)
@@ -349,18 +348,18 @@ var uColor = gl.getUniformLocation(cameraShaderProgram, 'uColor')
 gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
 
+// We rotate the dragon about the y axis every frame
 var dragonRotateY = 0
-
-var lightDragonMVMatrix
-var cameraDragonMVMatrix
 
 function drawShadowMap () {
   dragonRotateY += 0.01
 
   gl.useProgram(lightShaderProgram)
 
+  // Draw to our off screen drawing buffer
   gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
 
+  // Set the viewport to our shadow texture's size
   gl.viewport(0, 0, shadowDepthTextureSize, shadowDepthTextureSize)
   gl.clearColor(0, 0, 0, 1)
   gl.clearDepth(1.0)
@@ -370,20 +369,12 @@ function drawShadowMap () {
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
 
-  lightDragonMVMatrix = glMat4.create()
+  var lightDragonMVMatrix = glMat4.create()
   glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
   glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
   gl.uniformMatrix4fv(shadowMVMatrix, false, lightDragonMVMatrix)
 
   gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
-
-  gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
-  gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
-
-  gl.uniformMatrix4fv(shadowMVMatrix, false, lightViewMatrix)
-
-  gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 }
@@ -406,7 +397,7 @@ function drawModels () {
   camera = glMat4.lookAt(camera, [camera[12], camera[13], camera[14]], [0, 0, 0], [0, 1, 0])
 
   // Rename to Light Matrix
-  lightDragonMVMatrix = glMat4.create()
+  var lightDragonMVMatrix = glMat4.create()
   glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
   glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
   gl.uniformMatrix4fv(uMVMatrix, false, lightDragonMVMatrix)
