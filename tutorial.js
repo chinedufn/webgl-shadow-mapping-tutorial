@@ -1,15 +1,26 @@
+/**
+ * Section 1 - Getting set up
+ */
+
+// gl-mat4 helps us to matrix math
 var glMat4 = require('gl-mat4')
+// standford dragon gives us vertex data for drawing a dragon
 var stanfordDragon = require('stanford-dragon/4')
 
+// We insert our canvas into the page
 var canvas = document.createElement('canvas')
 canvas.width = 500
 canvas.height = 500
 var mountLocation = document.getElementById('webgl-shadow-map-tut') || document.body
 mountLocation.appendChild(canvas)
 
+// We get our WebGL context and enable depth testing so that we can tell when an object
+// is behind another object
 var gl = canvas.getContext('webgl')
 gl.enable(gl.DEPTH_TEST)
 
+// We set up controls so that we can drag our mouse or finger to adjust the rotation of
+// the camera about the X and Y axes
 var canvasIsPressed = false
 var xRotation = Math.PI / 20
 var yRotation = 0
@@ -56,68 +67,14 @@ canvas.addEventListener('touchmove', function (e) {
   lastPressY = e.touches[0].clientY
 })
 
-var vertexGLSL = `
-attribute vec3 aVertexPosition;
+/**
+ * Section 2 - Shaders
+ */
 
-uniform mat4 uPMatrix;
-uniform mat4 uMVMatrix;
-uniform mat4 lightMViewMatrix;
-uniform mat4 lightProjectionMatrix;
-const mat4 texUnits = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
-
-varying vec2 vDepthUv;
-varying vec4 shadowPos;
-
-void main (void) {
-  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
-
-  shadowPos = texUnits * lightProjectionMatrix * lightMViewMatrix * vec4(aVertexPosition, 1.0);
-}
-`
-
-var fragmentGLSL = `
-precision mediump float;
-
-varying vec2 vDepthUv;
-varying vec4 shadowPos;
-
-uniform sampler2D depthColorTexture;
-uniform vec3 uColor;
-
-float unpack (vec4 color) {
-  const vec4 bitShifts = vec4(
-    1.0 / (256.0 * 256.0 * 256.0),
-    1.0 / (256.0 * 256.0),
-    1.0 / 256.0,
-    1
-  );
-  return dot(color, bitShifts);
-}
-
-void main(void) {
-  vec3 fragmentDepth = shadowPos.xyz;
-  float acneRemover = 0.007;
-  fragmentDepth.z -= acneRemover;
-
-  float texelSize = 1.0 / 1024.0;
-  float amountInLight = 0.0;
-
-  for (int x = -1; x <= 1; x++) {
-    for (int y = -1; y <= 1; y++) {
-      float texelDepth = unpack(texture2D(depthColorTexture, fragmentDepth.xy + vec2(x, y) * texelSize));
-      if (fragmentDepth.z < texelDepth) {
-        amountInLight += 1.0;
-      }
-    }
-  }
-  amountInLight /= 9.0;
-
-  gl_FragColor = vec4(amountInLight * uColor, 1.0);
-}
-`
-
-// TODO: Rename to depth VS and depth FS
-var shadowVertexGLSL = `
+// We create a vertex shader from the light's point of view. You never see this in the
+// demo. It is used behind the scenes to create a texture that we can use to test testing whether
+// or not a point is inside of our outside of the shadow
+var lightVertexGLSL = `
 attribute vec3 aVertexPosition;
 
 uniform mat4 uPMatrix;
@@ -127,12 +84,11 @@ void main (void) {
   gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 }
 `
-
-var shadowFragmentGLSL = `
+var lightFragmentGLSL = `
 precision mediump float;
 
-vec4 pack (float depth) {
-  const vec4 bitSh = vec4(
+vec4 encodeFloat (float depth) {
+  const vec4 bitShift = vec4(
     256 * 256 * 256,
     256 * 256,
     256,
@@ -144,46 +100,124 @@ vec4 pack (float depth) {
     1.0 / 256.0,
     1.0 / 256.0
   );
-  vec4 comp = fract(depth * bitSh);
+  vec4 comp = fract(depth * bitShift);
   comp -= comp.xxyz * bitMask;
   return comp;
 }
 
 void main (void) {
-  gl_FragColor = pack(gl_FragCoord.z);
+  // Encode the distance into the scene of this fragment.
+  // We'll later decode this when rendering from our camera's
+  // perspective and use this number to know whether the fragment
+  // that our camera is seeing is inside of our outside of the shadow
+  gl_FragColor = encodeFloat(gl_FragCoord.z);
 }
 `
 
-var vertexShader = gl.createShader(gl.VERTEX_SHADER)
-gl.shaderSource(vertexShader, vertexGLSL)
-gl.compileShader(vertexShader)
-console.log(gl.getShaderInfoLog(vertexShader))
+// We create a vertex shader that renders the scene from the camera's point of view.
+// This is what you see when you view the demo
+var cameraVertexGLSL = `
+attribute vec3 aVertexPosition;
 
-var fragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
-gl.shaderSource(fragmentShader, fragmentGLSL)
-gl.compileShader(fragmentShader)
-console.log(gl.getShaderInfoLog(fragmentShader))
+uniform mat4 uPMatrix;
+uniform mat4 uMVMatrix;
+uniform mat4 lightMViewMatrix;
+uniform mat4 lightProjectionMatrix;
 
-var shaderProgram = gl.createProgram()
-gl.attachShader(shaderProgram, vertexShader)
-gl.attachShader(shaderProgram, fragmentShader)
-gl.linkProgram(shaderProgram)
+// Used to normalize our coordinates from clip space to (0 - 1)
+// so that we can access the corresponding point in our depth color texture
+const mat4 texUnitConverter = mat4(0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.5, 0.5, 0.5, 1.0);
 
-var shadowVertexShader = gl.createShader(gl.VERTEX_SHADER)
-gl.shaderSource(shadowVertexShader, shadowVertexGLSL)
-gl.compileShader(shadowVertexShader)
-console.log(gl.getShaderInfoLog(shadowVertexShader))
+varying vec2 vDepthUv;
+varying vec4 shadowPos;
 
-var shadowFragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
-gl.shaderSource(shadowFragmentShader, shadowFragmentGLSL)
-gl.compileShader(shadowFragmentShader)
-console.log(gl.getShaderInfoLog(shadowFragmentShader))
+void main (void) {
+  gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
 
-var shadowProgram = gl.createProgram()
-gl.attachShader(shadowProgram, shadowVertexShader)
-gl.attachShader(shadowProgram, shadowFragmentShader)
-gl.linkProgram(shadowProgram)
+  shadowPos = texUnitConverter * lightProjectionMatrix * lightMViewMatrix * vec4(aVertexPosition, 1.0);
+}
+`
+var cameraFragmentGLSL = `
+precision mediump float;
 
+varying vec2 vDepthUv;
+varying vec4 shadowPos;
+
+uniform sampler2D depthColorTexture;
+uniform vec3 uColor;
+
+float decodeFloat (vec4 color) {
+  const vec4 bitShift = vec4(
+    1.0 / (256.0 * 256.0 * 256.0),
+    1.0 / (256.0 * 256.0),
+    1.0 / 256.0,
+    1
+  );
+  return dot(color, bitShift);
+}
+
+void main(void) {
+  vec3 fragmentDepth = shadowPos.xyz;
+  float shadowAcneRemover = 0.007;
+  fragmentDepth.z -= shadowAcneRemover;
+
+  float texelSize = 1.0 / 1024.0;
+  float amountInLight = 0.0;
+
+  // Check whether or not the current fragment and the 8 fragments surrounding
+  // the current fragment are in the shadow. We then average out whether or not
+  // all of these fragments are in the shadow to determine the shadow contribution
+  // of the current fragment.
+  // So if 4 out of 9 fragments that we check are in the shadow then we'll say that
+  // this fragment is 4/9ths in the shadow so it'll be a little brighter than something
+  // that is 9/9ths in the shadow.
+  for (int x = -1; x <= 1; x++) {
+    for (int y = -1; y <= 1; y++) {
+      float texelDepth = decodeFloat(texture2D(depthColorTexture, fragmentDepth.xy + vec2(x, y) * texelSize));
+      if (fragmentDepth.z < texelDepth) {
+        amountInLight += 1.0;
+      }
+    }
+  }
+  amountInLight /= 9.0;
+
+  gl_FragColor = vec4(amountInLight * uColor, 1.0);
+}
+`
+
+// Link our light and camera shader programs
+var cameraVertexShader = gl.createShader(gl.VERTEX_SHADER)
+gl.shaderSource(cameraVertexShader, cameraVertexGLSL)
+gl.compileShader(cameraVertexShader)
+
+var cameraFragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
+gl.shaderSource(cameraFragmentShader, cameraFragmentGLSL)
+gl.compileShader(cameraFragmentShader)
+
+var cameraShaderProgram = gl.createProgram()
+gl.attachShader(cameraShaderProgram, cameraVertexShader)
+gl.attachShader(cameraShaderProgram, cameraFragmentShader)
+gl.linkProgram(cameraShaderProgram)
+
+var lightVertexShader = gl.createShader(gl.VERTEX_SHADER)
+gl.shaderSource(lightVertexShader, lightVertexGLSL)
+gl.compileShader(lightVertexShader)
+
+var lightFragmentShader = gl.createShader(gl.FRAGMENT_SHADER)
+gl.shaderSource(lightFragmentShader, lightFragmentGLSL)
+gl.compileShader(lightFragmentShader)
+
+var lightShaderProgram = gl.createProgram()
+gl.attachShader(lightShaderProgram, lightVertexShader)
+gl.attachShader(lightShaderProgram, lightFragmentShader)
+gl.linkProgram(lightShaderProgram)
+
+/**
+ * Setting up our buffered data
+ */
+
+// Set up the four corners of our floor quad so that
+// we can draw the floor
 var floorPositions = [
   // Bottom Left (0)
   -30.0, 0.0, 30.0,
@@ -198,9 +232,15 @@ var floorIndices = [
   // Front face
   0, 1, 2, 0, 2, 3
 ]
+
 var dragonPositions = stanfordDragon.positions
 var dragonIndices = stanfordDragon.cells
+// standford dragon comes with nested arrays that look like this
+// [[0, 0, 0,], [1, 0, 1]]
+// We flatten them to this so that we can buffer them onto the GPU
+// [0, 0, 0, 1, 0, 1]
 dragonPositions = dragonPositions.reduce(function (all, vertex) {
+  // Scale everything down by 10
   all.push(vertex[0] / 10)
   all.push(vertex[1] / 10)
   all.push(vertex[2] / 10)
@@ -213,7 +253,12 @@ dragonIndices = dragonIndices.reduce(function (all, vertex) {
   return all
 }, [])
 
-var vertexPositionAttrib = gl.getAttribLocation(shadowProgram, 'aVertexPosition')
+/**
+ * Camera shader setup
+ */
+
+// We enable our vertex attributes for our camera's shader.
+var vertexPositionAttrib = gl.getAttribLocation(lightShaderProgram, 'aVertexPosition')
 gl.enableVertexAttribArray(vertexPositionAttrib)
 
 var dragonPositionBuffer = gl.createBuffer()
@@ -235,16 +280,15 @@ gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_DRAW)
 
 /**
- * Shadow
+ * Light shader setup
  */
-gl.useProgram(shadowProgram)
 
-gl.bindBuffer(gl.ARRAY_BUFFER, dragonPositionBuffer)
-gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
+gl.useProgram(lightShaderProgram)
 
-gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, dragonIndexBuffer)
-gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(dragonIndices), gl.STATIC_DRAW)
-
+// This section is the meat of things. We create an off screen frame buffer that we'll render
+// our scene onto from our light's viewpoint. We output that to a color texture `shadowDepthTexture`.
+// Then later our camera shader will use `shadowDepthTexture` to determine whether or not fragments
+// are in the shadow.
 var shadowFramebuffer = gl.createFramebuffer()
 gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
 
@@ -264,66 +308,45 @@ gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER,
 gl.bindTexture(gl.TEXTURE_2D, null)
 gl.bindRenderbuffer(gl.RENDERBUFFER, null)
 
+// We create an orthographic projection and view matrix from which our light
+// will vie the scene
 var lightProjectionMatrix = glMat4.ortho([], -40, 40, -40, 40, -40.0, 80)
+var lightViewMatrix = glMat4.lookAt([], [0, 2, -3], [0, 0, 0], [0, 1, 0])
 
-// TODO: This is a model view matrix
-var lightMViewMatrix = glMat4.lookAt([], [0, 2, -3], [0, 0, 0], [0, 1, 0])
-
-var shadowPMatrix = gl.getUniformLocation(shadowProgram, 'uPMatrix')
-var shadowMVMatrix = gl.getUniformLocation(shadowProgram, 'uMVMatrix')
+var shadowPMatrix = gl.getUniformLocation(lightShaderProgram, 'uPMatrix')
+var shadowMVMatrix = gl.getUniformLocation(lightShaderProgram, 'uMVMatrix')
 
 gl.uniformMatrix4fv(shadowPMatrix, false, lightProjectionMatrix)
-gl.uniformMatrix4fv(shadowMVMatrix, false, lightMViewMatrix)
+gl.uniformMatrix4fv(shadowMVMatrix, false, lightViewMatrix)
 
-gl.viewport(0, 0, 1024, 1024)
-gl.clearColor(0, 0, 0, 1)
-gl.clearDepth(1.0)
-gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
-
-/**
- * Floor
- */
 gl.bindBuffer(gl.ARRAY_BUFFER, floorPositionBuffer)
 gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
 
 gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
 gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(floorIndices), gl.STATIC_DRAW)
 
-/**
- * Mip map
- */
-
 gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 
 /**
- * Scene
+ * Scene uniforms
  */
-gl.useProgram(shaderProgram)
-
-var vertexPositionAttrib = gl.getAttribLocation(shaderProgram, 'aVertexPosition')
-gl.enableVertexAttribArray(vertexPositionAttrib)
+gl.useProgram(cameraShaderProgram)
 
 // TODO: Rename
-var samplerUniform = gl.getUniformLocation(shaderProgram, 'depthColorTexture')
+var samplerUniform = gl.getUniformLocation(cameraShaderProgram, 'depthColorTexture')
 
 gl.activeTexture(gl.TEXTURE0)
 gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
 gl.uniform1i(samplerUniform, 0)
 
-var uMVMatrix = gl.getUniformLocation(shaderProgram, 'uMVMatrix')
-var uPMatrix = gl.getUniformLocation(shaderProgram, 'uPMatrix')
-var uLightMatrix = gl.getUniformLocation(shaderProgram, 'lightMViewMatrix')
-var uLightProjection = gl.getUniformLocation(shaderProgram, 'lightProjectionMatrix')
-var uColor = gl.getUniformLocation(shaderProgram, 'uColor')
+var uMVMatrix = gl.getUniformLocation(cameraShaderProgram, 'uMVMatrix')
+var uPMatrix = gl.getUniformLocation(cameraShaderProgram, 'uPMatrix')
+var uLightMatrix = gl.getUniformLocation(cameraShaderProgram, 'lightMViewMatrix')
+var uLightProjection = gl.getUniformLocation(cameraShaderProgram, 'lightProjectionMatrix')
+var uColor = gl.getUniformLocation(cameraShaderProgram, 'uColor')
 
-gl.uniformMatrix4fv(uLightMatrix, false, lightMViewMatrix)
+gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
 gl.uniformMatrix4fv(uLightProjection, false, lightProjectionMatrix)
-
-/**
- * Floor
- */
-
-console.log(gl.getError())
 
 var dragonRotateY = 0
 
@@ -333,8 +356,7 @@ var cameraDragonMVMatrix
 function drawShadowMap () {
   dragonRotateY += 0.01
 
-  gl.useProgram(shadowProgram)
-  // gl.cullFace(gl.FRONT)
+  gl.useProgram(lightShaderProgram)
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
 
@@ -349,7 +371,7 @@ function drawShadowMap () {
 
   lightDragonMVMatrix = glMat4.create()
   glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
-  glMat4.multiply(lightDragonMVMatrix, lightMViewMatrix, lightDragonMVMatrix)
+  glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
   gl.uniformMatrix4fv(shadowMVMatrix, false, lightDragonMVMatrix)
 
   gl.drawElements(gl.TRIANGLES, dragonIndices.length, gl.UNSIGNED_SHORT, 0)
@@ -358,17 +380,15 @@ function drawShadowMap () {
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
 
-  gl.uniformMatrix4fv(shadowMVMatrix, false, lightMViewMatrix)
+  gl.uniformMatrix4fv(shadowMVMatrix, false, lightViewMatrix)
 
   gl.drawElements(gl.TRIANGLES, floorIndices.length, gl.UNSIGNED_SHORT, 0)
-
-  // gl.cullFace(gl.BACK)
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, null)
 }
 
 function drawModels () {
-  gl.useProgram(shaderProgram)
+  gl.useProgram(cameraShaderProgram)
 
   var camera = glMat4.create()
   glMat4.translate(camera, camera, [0, 0, 45])
@@ -387,7 +407,7 @@ function drawModels () {
   // Rename to Light Matrix
   lightDragonMVMatrix = glMat4.create()
   glMat4.rotateY(lightDragonMVMatrix, lightDragonMVMatrix, dragonRotateY)
-  glMat4.multiply(lightDragonMVMatrix, lightMViewMatrix, lightDragonMVMatrix)
+  glMat4.multiply(lightDragonMVMatrix, lightViewMatrix, lightDragonMVMatrix)
   gl.uniformMatrix4fv(uMVMatrix, false, lightDragonMVMatrix)
 
   gl.uniformMatrix4fv(uLightMatrix, false, lightDragonMVMatrix)
@@ -417,7 +437,7 @@ function drawModels () {
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, floorIndexBuffer)
   gl.vertexAttribPointer(vertexPositionAttrib, 3, gl.FLOAT, false, 0, 0)
 
-  gl.uniformMatrix4fv(uLightMatrix, false, lightMViewMatrix)
+  gl.uniformMatrix4fv(uLightMatrix, false, lightViewMatrix)
   gl.uniformMatrix4fv(uMVMatrix, false, camera)
   gl.uniform3fv(uColor, [0.6, 0.6, 0.6])
 
