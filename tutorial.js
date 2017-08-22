@@ -74,6 +74,7 @@ canvas.addEventListener('touchmove', function (e) {
 // We create a vertex shader from the light's point of view. You never see this in the
 // demo. It is used behind the scenes to create a texture that we can use to test testing whether
 // or not a point is inside of our outside of the shadow
+var shadowDepthTextureSize = 1024
 var lightVertexGLSL = `
 attribute vec3 aVertexPosition;
 
@@ -161,7 +162,7 @@ void main(void) {
   float shadowAcneRemover = 0.007;
   fragmentDepth.z -= shadowAcneRemover;
 
-  float texelSize = 1.0 / 1024.0;
+  float texelSize = 1.0 / ${shadowDepthTextureSize}.0;
   float amountInLight = 0.0;
 
   // Check whether or not the current fragment and the 8 fragments surrounding
@@ -296,11 +297,11 @@ var shadowDepthTexture = gl.createTexture()
 gl.bindTexture(gl.TEXTURE_2D, shadowDepthTexture)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST)
 gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST)
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1024, 1024, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, shadowDepthTextureSize, shadowDepthTextureSize, 0, gl.RGBA, gl.UNSIGNED_BYTE, null)
 
 var renderBuffer = gl.createRenderbuffer()
 gl.bindRenderbuffer(gl.RENDERBUFFER, renderBuffer)
-gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, 1024, 1024)
+gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, shadowDepthTextureSize, shadowDepthTextureSize)
 
 gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, shadowDepthTexture, 0)
 gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderBuffer)
@@ -360,7 +361,7 @@ function drawShadowMap () {
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, shadowFramebuffer)
 
-  gl.viewport(0, 0, 1024, 1024)
+  gl.viewport(0, 0, shadowDepthTextureSize, shadowDepthTextureSize)
   gl.clearColor(0, 0, 0, 1)
   gl.clearDepth(1.0)
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
